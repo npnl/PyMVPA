@@ -1,0 +1,46 @@
+#!/bin/sh
+# Jonas Kaplan, ####jonas(at)jonaskaplan(dot)com#####
+
+#merge EPIs
+echo "Merging EPIs"
+fslmerge -t epi_all EPI*
+
+#motion correction
+echo "Motion correction"
+mcflirt -in epi_all -out epi_all_mc -plots -report
+
+#pull out middle volume for reference (the second to last number #is half the total number of volumes you have)
+echo "Pulling out example_func"
+fslroi S2_AllAct_mcf example_func 231 1
+
+#skull strip it
+echo "Skull stripping example_func"
+bet example_func example_func_brain -f .3
+
+#make whole brain mask
+echo "Making whole brain mask"
+fslmaths example_func_brain -bin wholebrain
+
+#skull strip mprage
+echo "Skull stripping mprage"
+bet mprage mprage_brain -R -f .4
+
+#make directory for registration matrices
+mkdir reg
+
+#register example_func to anatomical
+echo "Registering example_func to mprage"
+flirt -in example_func_brain -ref mprage_brain -dof 6 -omat reg/example_func2highres.mat
+
+#register mprage to standard space
+echo "Registering mprage to standard"
+flirt -in mprage_brain -ref /usr/share/fsl/data/standard/MNI152_T1_2mm_brain -dof 12 -omat reg/highres2standard.mat
+
+#concatenate matrices
+echo "Concatenating matrices"
+convert_xfm -omat reg/example_func2standard.mat -concat reg/highres2standard.mat reg/example_func2highres.mat
+convert_xfm -omat reg/standard2example_func.mat -inverse reg/example_func2standard.mat
+convert_xfm -omat reg/highres2example_func.mat -inverse reg/example_func2highres.mat
+convert_xfm -omat reg/standard2highres.mat -inverse reg/highres2standard.mat
+
+echo "Done."

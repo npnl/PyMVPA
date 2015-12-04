@@ -1,0 +1,61 @@
+# Mona Sobhani, ####msobhani(at)usc(dot)edu####
+
+import sys
+if (sys.argv.__len__() < 2):
+ print "\n\tusage: mvpa.py <subject>\n\n"
+ sys.exit()
+else:
+ subject = sys.argv[1]
+
+print "Subject is " + subject
+
+#start pymvpa
+import numpy as np
+import mvpa.suite
+from mvpa.suite import *
+
+#load your text file with the attributes listed.  Make sure this file is a unix text file.
+attributesfile = "/mnt/host/pyMVPA/" + subject + "/mvpaconditions_" + subject + "unix_liking"
+myattributes=SampleAttributes(attributesfile)
+
+#Load the dataset and assign targets, chunks, and a mask
+datfile = "/mnt/host/pyMVPA/" + subject + "/" + subject + "_AllAct_mcf.nii.gz"
+maskfile = "/mnt/host/pyMVPA/" + subject + "/IFG_parsO_25_subjspace.nii.gz"
+dataset=fmri_dataset(datfile, targets=myattributes.targets, chunks=myattributes.chunks, mask=maskfile)
+
+#Check the shape of the dataset
+print dataset.shape
+
+#Detrend the data
+poly_detrend(dataset, polyord=2,chunks_attr="chunks")
+ 
+#z-score the data
+zscore(dataset,param_est=('targets',['Rest','Fixation']))
+
+stimlist = ['Like','Dislike']
+dataset = dataset[np.array([l in stimlist for l in dataset.sa.targets])]
+
+
+#Choose a partitioner
+splitter=NFoldPartitioner()
+
+#Choose a classifier algorithm
+clf=LinearCSVMC()
+
+#Set up the cross-validation
+cvte=CrossValidation(clf,splitter, errorfx=lambda p,t: np.mean(p==t), enable_ca=['stats'])
+
+#GO!
+results=cvte(dataset)
+
+#see the mean
+accuracy = np.mean(results)
+
+print "Accuracy is %f" % accuracy
+#see the confusion matrix
+#cvte.ca.stats.matrix
+cvte.ca.stats.plot(numbers=True)
+pl.show()
+
+
+
